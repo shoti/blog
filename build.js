@@ -260,6 +260,43 @@ function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, 'utf-8');
 }
 
+function generateOgImage(title) {
+  var escapedTitle = escapeHtml(title);
+  var fontSize = escapedTitle.length > 50 ? 52 : escapedTitle.length > 30 ? 60 : 72;
+  var lines = wrapSvgText(escapedTitle, fontSize, 1000);
+  var lineCount = (lines.match(/<tspan/g) || []).length || 1;
+  var textBlockHeight = lineCount * fontSize * 1.25;
+  var textY = (630 - textBlockHeight) / 2 + fontSize;
+  return '<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">' +
+    '<rect width="1200" height="630" fill="#1a1a1a"/>' +
+    '<line x1="100" y1="80" x2="1100" y2="80" stroke="#333" stroke-width="1"/>' +
+    '<line x1="100" y1="550" x2="1100" y2="550" stroke="#333" stroke-width="1"/>' +
+    '<text x="600" y="' + textY + '" fill="#d4d4d4" font-family="Georgia, serif" font-size="' + fontSize + '" text-anchor="middle">' +
+    lines +
+    '</text>' +
+    '<text x="600" y="596" fill="#e07a5f" font-family="Helvetica, Arial, sans-serif" font-size="20" text-anchor="middle">blog.mtvarelishvili.com</text>' +
+    '</svg>';
+}
+
+function wrapSvgText(text, fontSize, maxWidth) {
+  var charPerLine = Math.floor(maxWidth / (fontSize * 0.52));
+  var words = text.split(' ');
+  var lines = [];
+  var current = '';
+  for (var w of words) {
+    if ((current + ' ' + w).trim().length > charPerLine && current) {
+      lines.push(current.trim());
+      current = w;
+    } else {
+      current = current ? current + ' ' + w : w;
+    }
+  }
+  if (current.trim()) lines.push(current.trim());
+  return lines.slice(0, 3).map(function (line, i) {
+    return '<tspan x="600" dy="' + (i === 0 ? 0 : fontSize * 1.25) + '">' + line + '</tspan>';
+  }).join('');
+}
+
 // --- New Post Command ---
 
 if (process.argv[2] === 'new') {
@@ -335,11 +372,15 @@ var homePosts = posts.slice(0, 10).map(function (p) {
   };
 });
 var indexContent = render(indexTemplate, { posts: homePosts });
+var homeOgSvg = generateOgImage('Shota Mtvarelishvili');
+writeFile(path.join(DIST_DIR, 'og-home.svg'), homeOgSvg);
 var indexPage = wrapInBase(indexContent, {
   title: 'Shota Mtvarelishvili',
+  ogTitle: 'Shota Mtvarelishvili',
   description: 'Senior Software Engineer writing about code and things.',
   canonical: BASE_URL + '/',
   ogType: 'website',
+  ogImage: BASE_URL + '/og-home.svg',
   head: '',
   readingProgress: false
 });
@@ -386,11 +427,16 @@ posts.forEach(function (post, idx) {
 
   var headExtra = '<script type="application/ld+json">' + structuredData + '</script>';
 
+  var ogSvg = generateOgImage(post.title);
+  writeFile(path.join(DIST_DIR, 'posts', post.slug, 'og.svg'), ogSvg);
+
   var page = wrapInBase(postContent, {
     title: post.title + ' \u2014 Shota Mtvarelishvili',
+    ogTitle: post.title,
     description: post.description,
     canonical: BASE_URL + '/posts/' + post.slug + '/',
     ogType: 'article',
+    ogImage: BASE_URL + '/posts/' + post.slug + '/og.svg',
     head: headExtra,
     readingProgress: true
   });
@@ -415,7 +461,8 @@ var years = Object.keys(yearMap).sort().reverse().map(function (y) {
 var archiveContent = render(archiveTemplate, { years: years });
 var archivePage = wrapInBase(archiveContent, {
   title: 'Archive \u2014 Shota Mtvarelishvili',
-  description: 'All posts on mtvarelishvili.com.',
+  ogTitle: 'Archive',
+  description: 'All posts on blog.mtvarelishvili.com.',
   canonical: BASE_URL + '/archive/',
   ogType: 'website',
   head: '',
@@ -446,6 +493,7 @@ var personSchema = JSON.stringify({
 var aboutHead = '<script type="application/ld+json">' + personSchema + '</script>';
 var aboutPage = wrapInBase(aboutContent, {
   title: 'About \u2014 Shota Mtvarelishvili',
+  ogTitle: 'About',
   description: 'About Shota Mtvarelishvili — Senior Software Engineer based in Tbilisi, Georgia.',
   canonical: BASE_URL + '/about/',
   ogType: 'website',
@@ -458,6 +506,7 @@ writeFile(path.join(DIST_DIR, 'about', 'index.html'), aboutPage);
 var notFoundContent = render(notFoundTemplate, {});
 var notFoundPage = wrapInBase(notFoundContent, {
   title: '404 \u2014 Shota Mtvarelishvili',
+  ogTitle: '404',
   description: 'Page not found.',
   canonical: BASE_URL + '/404.html',
   ogType: 'website',
