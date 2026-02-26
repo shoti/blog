@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const BASE_URL = 'https://blog.mtvarelishvili.com';
+const BASE_URL = 'https://shoti.github.io';
 const POSTS_DIR = path.join(__dirname, 'content', 'posts');
 const TEMPLATES_DIR = path.join(__dirname, 'templates');
 const STATIC_DIR = path.join(__dirname, 'static');
@@ -274,7 +274,7 @@ function generateOgImage(title) {
     '<text x="600" y="' + textY + '" fill="#d4d4d4" font-family="Georgia, serif" font-size="' + fontSize + '" text-anchor="middle">' +
     lines +
     '</text>' +
-    '<text x="600" y="596" fill="#e07a5f" font-family="Helvetica, Arial, sans-serif" font-size="20" text-anchor="middle">blog.mtvarelishvili.com</text>' +
+    '<text x="600" y="596" fill="#e07a5f" font-family="Helvetica, Arial, sans-serif" font-size="20" text-anchor="middle">shoti.github.io</text>' +
     '</svg>';
 }
 
@@ -348,12 +348,6 @@ fs.mkdirSync(DIST_DIR, { recursive: true });
 
 // Copy static files
 copyDir(STATIC_DIR, DIST_DIR);
-
-// Copy CNAME
-var cnamePath = path.join(__dirname, 'CNAME');
-if (fs.existsSync(cnamePath)) {
-  fs.copyFileSync(cnamePath, path.join(DIST_DIR, 'CNAME'));
-}
 
 // --- Generate Pages ---
 
@@ -462,7 +456,7 @@ var archiveContent = render(archiveTemplate, { years: years });
 var archivePage = wrapInBase(archiveContent, {
   title: 'Archive \u2014 Shota Mtvarelishvili',
   ogTitle: 'Archive',
-  description: 'All posts on blog.mtvarelishvili.com.',
+  description: 'All posts on shoti.github.io.',
   canonical: BASE_URL + '/archive/',
   ogType: 'website',
   head: '',

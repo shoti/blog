@@ -1,4 +1,4 @@
-# blog.mtvarelishvili.com
+# shoti.github.io
 
 Personal blog. Static HTML/CSS/JS. Zero runtime dependencies.
 
