@@ -10,15 +10,17 @@ const TEMPLATES_DIR = path.join(__dirname, 'templates');
 const STATIC_DIR = path.join(__dirname, 'static');
 const DIST_DIR = path.join(__dirname, 'dist');
 
+const REQUIRED_POST_FIELDS = ['title', 'slug', 'date', 'body'];
+
 // --- Minimal Markdown Parser ---
 
 function parseMarkdown(text) {
-  var lines = text.split('\n');
-  var html = [];
-  var i = 0;
+  const lines = text.split('\n');
+  const html = [];
+  let i = 0;
 
   while (i < lines.length) {
-    var line = lines[i];
+    const line = lines[i];
 
     // Blank line
     if (line.trim() === '') {
@@ -28,15 +30,15 @@ function parseMarkdown(text) {
 
     // Code block
     if (line.trim().startsWith('```')) {
-      var lang = line.trim().slice(3).trim();
-      var code = [];
+      const lang = line.trim().slice(3).trim();
+      const code = [];
       i++;
       while (i < lines.length && !lines[i].trim().startsWith('```')) {
         code.push(lines[i]);
         i++;
       }
       i++; // skip closing ```
-      var escaped = escapeHtml(code.join('\n'));
+      const escaped = escapeHtml(code.join('\n'));
       if (lang) {
         html.push('<pre><code class="language-' + lang + '">' + escaped + '</code></pre>');
       } else {
@@ -46,9 +48,9 @@ function parseMarkdown(text) {
     }
 
     // Headings
-    var headingMatch = line.match(/^(#{1,4})\s+(.+)$/);
+    const headingMatch = line.match(/^(#{1,4})\s+(.+)$/);
     if (headingMatch) {
-      var level = headingMatch[1].length;
+      const level = headingMatch[1].length;
       html.push('<h' + level + '>' + inline(headingMatch[2]) + '</h' + level + '>');
       i++;
       continue;
@@ -63,7 +65,7 @@ function parseMarkdown(text) {
 
     // Blockquote
     if (line.trim().startsWith('> ')) {
-      var quoteLines = [];
+      const quoteLines = [];
       while (i < lines.length && lines[i].trim().startsWith('> ')) {
         quoteLines.push(lines[i].trim().slice(2));
         i++;
@@ -74,29 +76,29 @@ function parseMarkdown(text) {
 
     // Unordered list
     if (/^[-*]\s+/.test(line.trim())) {
-      var items = [];
+      const items = [];
       while (i < lines.length && /^[-*]\s+/.test(lines[i].trim())) {
         items.push(inline(lines[i].trim().replace(/^[-*]\s+/, '')));
         i++;
       }
-      html.push('<ul>' + items.map(function (item) { return '<li>' + item + '</li>'; }).join('') + '</ul>');
+      html.push('<ul>' + items.map(item => '<li>' + item + '</li>').join('') + '</ul>');
       continue;
     }
 
     // Ordered list
     if (/^\d+\.\s+/.test(line.trim())) {
-      var items = [];
+      const items = [];
       while (i < lines.length && /^\d+\.\s+/.test(lines[i].trim())) {
         items.push(inline(lines[i].trim().replace(/^\d+\.\s+/, '')));
         i++;
       }
-      html.push('<ol>' + items.map(function (item) { return '<li>' + item + '</li>'; }).join('') + '</ol>');
+      html.push('<ol>' + items.map(item => '<li>' + item + '</li>').join('') + '</ol>');
       continue;
     }
 
     // Image (standalone)
     if (/^!\[/.test(line.trim())) {
-      var imgMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
+      const imgMatch = line.trim().match(/^!\[([^\]]*)\]\(([^)]+)\)$/);
       if (imgMatch) {
         html.push('<p><img src="' + imgMatch[2] + '" alt="' + imgMatch[1] + '"></p>');
         i++;
@@ -105,7 +107,7 @@ function parseMarkdown(text) {
     }
 
     // Paragraph: collect consecutive non-empty, non-special lines
-    var para = [];
+    const para = [];
     while (i < lines.length && lines[i].trim() !== '' &&
            !lines[i].trim().startsWith('```') &&
            !lines[i].trim().startsWith('#') &&
@@ -153,52 +155,63 @@ function escapeHtml(text) {
 // --- Template Engine ---
 
 function findBalancedBlock(str, openTag, closeTag, startIdx) {
-  var depth = 1;
-  var i = startIdx;
+  let depth = 1;
+  let i = startIdx;
   while (i < str.length && depth > 0) {
-    if (str.slice(i).startsWith(openTag)) {
+    const nextOpen = str.indexOf(openTag, i);
+    const nextClose = str.indexOf(closeTag, i);
+    if (nextClose === -1) return -1;
+    if (nextOpen !== -1 && nextOpen < nextClose) {
       depth++;
-      i += openTag.length;
-    } else if (str.slice(i).startsWith(closeTag)) {
-      depth--;
-      if (depth === 0) return i;
-      i += closeTag.length;
+      i = nextOpen + openTag.length;
     } else {
-      i++;
+      depth--;
+      if (depth === 0) return nextClose;
+      i = nextClose + closeTag.length;
     }
   }
   return -1;
 }
 
 function render(template, data) {
-  var result = '';
-  var i = 0;
+  let result = '';
+  let i = 0;
 
   while (i < template.length) {
+    const next = template.indexOf('{{', i);
+    if (next === -1) {
+      result += template.slice(i);
+      break;
+    }
+
+    // Append everything before the tag
+    result += template.slice(i, next);
+    i = next;
+
     // {{#each key}}
-    var eachMatch = template.slice(i).match(/^\{\{#each (\w+)\}\}/);
+    const eachMatch = template.slice(i).match(/^\{\{#each (\w+)\}\}/);
     if (eachMatch) {
-      var key = eachMatch[1];
-      var bodyStart = i + eachMatch[0].length;
-      var bodyEnd = findBalancedBlock(template, '{{#each ', '{{/each}}', bodyStart);
+      const key = eachMatch[1];
+      const bodyStart = i + eachMatch[0].length;
+      const bodyEnd = findBalancedBlock(template, '{{#each ', '{{/each}}', bodyStart);
       if (bodyEnd === -1) break;
-      var body = template.slice(bodyStart, bodyEnd);
-      var arr = data[key];
+      const body = template.slice(bodyStart, bodyEnd);
+      const arr = data[key];
       if (Array.isArray(arr)) {
-        result += arr.map(function (item) { return render(body, item); }).join('');
+        result += arr.map(item => render(body, item)).join('');
       }
       i = bodyEnd + '{{/each}}'.length;
       continue;
     }
 
     // {{#if key}}
-    var ifMatch = template.slice(i).match(/^\{\{#if (\w+)\}\}/);
+    const ifMatch = template.slice(i).match(/^\{\{#if (\w+)\}\}/);
     if (ifMatch) {
-      var key = ifMatch[1];
-      var bodyStart = i + ifMatch[0].length;
-      var bodyEnd = findBalancedBlock(template, '{{#if ', '{{/if}}', bodyStart);
+      const key = ifMatch[1];
+      const bodyStart = i + ifMatch[0].length;
+      const bodyEnd = findBalancedBlock(template, '{{#if ', '{{/if}}', bodyStart);
       if (bodyEnd === -1) break;
-      var body = template.slice(bodyStart, bodyEnd);
+      const body = template.slice(bodyStart, bodyEnd);
       if (data[key]) {
         result += render(body, data);
       }
@@ -207,14 +220,15 @@ function render(template, data) {
     }
 
     // {{variable}}
-    var varMatch = template.slice(i).match(/^\{\{(\w+)\}\}/);
+    const varMatch = template.slice(i).match(/^\{\{(\w+)\}\}/);
     if (varMatch) {
-      var key = varMatch[1];
+      const key = varMatch[1];
       result += data[key] !== undefined ? data[key] : '';
       i += varMatch[0].length;
       continue;
     }
 
+    // Lone {{ that doesn't match any pattern — emit literally
     result += template[i];
     i++;
   }
@@ -225,8 +239,8 @@ function render(template, data) {
 // --- Utility ---
 
 function formatDate(dateStr) {
-  var d = new Date(dateStr + 'T00:00:00');
-  var months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const d = new Date(dateStr + 'T00:00:00');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
 }
 
@@ -245,10 +259,10 @@ function escapeXml(text) {
 
 function copyDir(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
-  var entries = fs.readdirSync(src, { withFileTypes: true });
-  for (var entry of entries) {
-    var srcPath = path.join(src, entry.name);
-    var destPath = path.join(dest, entry.name);
+  const entries = fs.readdirSync(src, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
     if (entry.isDirectory()) {
       copyDir(srcPath, destPath);
     } else {
@@ -263,12 +277,12 @@ function writeFile(filePath, content) {
 }
 
 function generateOgImage(title) {
-  var escapedTitle = escapeHtml(title);
-  var fontSize = escapedTitle.length > 50 ? 52 : escapedTitle.length > 30 ? 60 : 72;
-  var lines = wrapSvgText(escapedTitle, fontSize, 1000);
-  var lineCount = (lines.match(/<tspan/g) || []).length || 1;
-  var textBlockHeight = lineCount * fontSize * 1.25;
-  var textY = (630 - textBlockHeight) / 2 + fontSize;
+  const escapedTitle = escapeHtml(title);
+  const fontSize = escapedTitle.length > 50 ? 52 : escapedTitle.length > 30 ? 60 : 72;
+  const lines = wrapSvgText(escapedTitle, fontSize, 1000);
+  const lineCount = (lines.match(/<tspan/g) || []).length || 1;
+  const textBlockHeight = lineCount * fontSize * 1.25;
+  const textY = (630 - textBlockHeight) / 2 + fontSize;
   return '<svg width="1200" height="630" xmlns="http://www.w3.org/2000/svg">' +
     '<rect width="1200" height="630" fill="#1a1a1a"/>' +
     '<line x1="100" y1="80" x2="1100" y2="80" stroke="#333" stroke-width="1"/>' +
@@ -281,11 +295,11 @@ function generateOgImage(title) {
 }
 
 function wrapSvgText(text, fontSize, maxWidth) {
-  var charPerLine = Math.floor(maxWidth / (fontSize * 0.52));
-  var words = text.split(' ');
-  var lines = [];
-  var current = '';
-  for (var w of words) {
+  const charPerLine = Math.floor(maxWidth / (fontSize * 0.52));
+  const words = text.split(' ');
+  const lines = [];
+  let current = '';
+  for (const w of words) {
     if ((current + ' ' + w).trim().length > charPerLine && current) {
       lines.push(current.trim());
       current = w;
@@ -294,22 +308,38 @@ function wrapSvgText(text, fontSize, maxWidth) {
     }
   }
   if (current.trim()) lines.push(current.trim());
-  return lines.slice(0, 3).map(function (line, i) {
-    return '<tspan x="600" dy="' + (i === 0 ? 0 : fontSize * 1.25) + '">' + line + '</tspan>';
+  return lines.slice(0, 3).map((line, idx) => {
+    return '<tspan x="600" dy="' + (idx === 0 ? 0 : fontSize * 1.25) + '">' + line + '</tspan>';
   }).join('');
+}
+
+function validatePost(post, filename) {
+  const missing = REQUIRED_POST_FIELDS.filter(f => post[f] === undefined || post[f] === null);
+  if (missing.length > 0) {
+    console.error('Invalid post ' + filename + ': missing fields: ' + missing.join(', '));
+    process.exit(1);
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(post.date)) {
+    console.error('Invalid post ' + filename + ': date must be YYYY-MM-DD, got "' + post.date + '"');
+    process.exit(1);
+  }
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(post.slug)) {
+    console.error('Invalid post ' + filename + ': slug contains invalid characters: "' + post.slug + '"');
+    process.exit(1);
+  }
 }
 
 // --- New Post Command ---
 
 if (process.argv[2] === 'new') {
-  var title = process.argv.slice(3).join(' ');
+  const title = process.argv.slice(3).join(' ');
   if (!title) {
     console.error('Usage: npm run new "Post Title"');
     process.exit(1);
   }
-  var slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  var date = new Date().toISOString().slice(0, 10);
-  var post = {
+  const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const date = new Date().toISOString().slice(0, 10);
+  const post = {
     title: title,
     slug: slug,
     date: date,
@@ -318,7 +348,7 @@ if (process.argv[2] === 'new') {
     description: '',
     body: ''
   };
-  var filePath = path.join(POSTS_DIR, slug + '.json');
+  const filePath = path.join(POSTS_DIR, slug + '.json');
   fs.mkdirSync(POSTS_DIR, { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(post, null, 2) + '\n', 'utf-8');
   console.log('Created: ' + filePath);
@@ -327,22 +357,30 @@ if (process.argv[2] === 'new') {
 
 // --- Build ---
 
-var startTime = Date.now();
+const startTime = Date.now();
 
 // Load templates
-var baseTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'base.html'), 'utf-8');
-var indexTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'index.html'), 'utf-8');
-var postTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'post.html'), 'utf-8');
-var archiveTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'archive.html'), 'utf-8');
-var aboutTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'about.html'), 'utf-8');
-var notFoundTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, '404.html'), 'utf-8');
+const baseTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'base.html'), 'utf-8');
+const indexTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'index.html'), 'utf-8');
+const postTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'post.html'), 'utf-8');
+const archiveTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'archive.html'), 'utf-8');
+const aboutTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, 'about.html'), 'utf-8');
+const notFoundTemplate = fs.readFileSync(path.join(TEMPLATES_DIR, '404.html'), 'utf-8');
 
-// Load posts
-var postFiles = fs.readdirSync(POSTS_DIR).filter(function (f) { return f.endsWith('.json'); });
-var posts = postFiles.map(function (f) {
-  return JSON.parse(fs.readFileSync(path.join(POSTS_DIR, f), 'utf-8'));
-}).filter(function (p) { return !p.draft; })
-  .sort(function (a, b) { return b.date.localeCompare(a.date); });
+// Load and validate posts
+const postFiles = fs.readdirSync(POSTS_DIR).filter(f => f.endsWith('.json'));
+const posts = postFiles.map(f => {
+  const post = JSON.parse(fs.readFileSync(path.join(POSTS_DIR, f), 'utf-8'));
+  if (!post.draft) validatePost(post, f);
+  return post;
+}).filter(p => !p.draft)
+  .sort((a, b) => b.date.localeCompare(a.date));
+
+// Parse markdown once per post and cache the HTML
+for (const post of posts) {
+  post._html = parseMarkdown(post.body);
+  post._words = wordCount(post.body);
+}
 
 // Clean dist
 fs.rmSync(DIST_DIR, { recursive: true, force: true });
@@ -358,19 +396,17 @@ function wrapInBase(content, data) {
 }
 
 // Homepage
-var homePosts = posts.slice(0, 10).map(function (p) {
-  return {
-    title: p.title,
-    slug: p.slug,
-    date: p.date,
-    dateFormatted: formatDate(p.date),
-    description: p.description
-  };
-});
-var indexContent = render(indexTemplate, { posts: homePosts });
-var homeOgSvg = generateOgImage('Shota Mtvarelishvili');
+const homePosts = posts.slice(0, 10).map(p => ({
+  title: p.title,
+  slug: p.slug,
+  date: p.date,
+  dateFormatted: formatDate(p.date),
+  description: p.description
+}));
+const indexContent = render(indexTemplate, { posts: homePosts });
+const homeOgSvg = generateOgImage('Shota Mtvarelishvili');
 writeFile(path.join(DIST_DIR, 'og-home.svg'), homeOgSvg);
-var indexPage = wrapInBase(indexContent, {
+const indexPage = wrapInBase(indexContent, {
   title: 'Shota Mtvarelishvili',
   ogTitle: 'Shota Mtvarelishvili',
   description: 'Senior Software Engineer writing about code and things.',
@@ -383,21 +419,19 @@ var indexPage = wrapInBase(indexContent, {
 writeFile(path.join(DIST_DIR, 'index.html'), indexPage);
 
 // Post pages
-posts.forEach(function (post, idx) {
-  var body = parseMarkdown(post.body);
-  var words = wordCount(post.body);
-  var tags = post.tags.map(function (t) { return '#' + t; }).join(' ');
+posts.forEach((post, idx) => {
+  const tags = post.tags.map(t => '#' + t).join(' ');
 
-  var prevPost = idx < posts.length - 1 ? posts[idx + 1] : null;
-  var nextPost = idx > 0 ? posts[idx - 1] : null;
+  const prevPost = idx < posts.length - 1 ? posts[idx + 1] : null;
+  const nextPost = idx > 0 ? posts[idx - 1] : null;
 
-  var postContent = render(postTemplate, {
+  const postContent = render(postTemplate, {
     postTitle: post.title,
     date: post.date,
     dateFormatted: formatDate(post.date),
-    wordCount: words,
+    wordCount: post._words,
     tags: tags,
-    body: body,
+    body: post._html,
     prevPost: prevPost ? true : false,
     prevSlug: prevPost ? prevPost.slug : '',
     prevTitle: prevPost ? prevPost.title : '',
@@ -407,7 +441,7 @@ posts.forEach(function (post, idx) {
   });
 
   // Structured data for blog post
-  var structuredData = JSON.stringify({
+  const structuredData = JSON.stringify({
     '@context': 'https://schema.org',
     '@type': 'BlogPosting',
     headline: post.title,
@@ -421,12 +455,12 @@ posts.forEach(function (post, idx) {
     url: BASE_URL + '/posts/' + post.slug + '/'
   });
 
-  var headExtra = '<script type="application/ld+json">' + structuredData + '</script>';
+  const headExtra = '<script type="application/ld+json">' + structuredData + '</script>';
 
-  var ogSvg = generateOgImage(post.title);
+  const ogSvg = generateOgImage(post.title);
   writeFile(path.join(DIST_DIR, 'posts', post.slug, 'og.svg'), ogSvg);
 
-  var page = wrapInBase(postContent, {
+  const page = wrapInBase(postContent, {
     title: post.title + ' \u2014 Shota Mtvarelishvili',
     ogTitle: post.title,
     description: post.description,
@@ -440,9 +474,9 @@ posts.forEach(function (post, idx) {
 });
 
 // Archive page
-var yearMap = {};
-posts.forEach(function (p) {
-  var year = p.date.slice(0, 4);
+const yearMap = {};
+posts.forEach(p => {
+  const year = p.date.slice(0, 4);
   if (!yearMap[year]) yearMap[year] = [];
   yearMap[year].push({
     title: p.title,
@@ -451,11 +485,11 @@ posts.forEach(function (p) {
     dateFormatted: formatDate(p.date)
   });
 });
-var years = Object.keys(yearMap).sort().reverse().map(function (y) {
-  return { year: y, posts: yearMap[y] };
-});
-var archiveContent = render(archiveTemplate, { years: years });
-var archivePage = wrapInBase(archiveContent, {
+const years = Object.keys(yearMap).sort().reverse().map(y => ({
+  year: y, posts: yearMap[y]
+}));
+const archiveContent = render(archiveTemplate, { years: years });
+const archivePage = wrapInBase(archiveContent, {
   title: 'Archive \u2014 Shota Mtvarelishvili',
   ogTitle: 'Archive',
   description: 'All posts on shoti.github.io.',
@@ -467,13 +501,13 @@ var archivePage = wrapInBase(archiveContent, {
 writeFile(path.join(DIST_DIR, 'archive', 'index.html'), archivePage);
 
 // About page
-var aboutData = JSON.parse(fs.readFileSync(path.join(__dirname, 'content', 'about.json'), 'utf-8'));
-var aboutBody = parseMarkdown(aboutData.body);
-var aboutContent = render(aboutTemplate, {
+const aboutData = JSON.parse(fs.readFileSync(path.join(__dirname, 'content', 'about.json'), 'utf-8'));
+const aboutBody = parseMarkdown(aboutData.body);
+const aboutContent = render(aboutTemplate, {
   heading: aboutData.heading,
   body: aboutBody
 });
-var personSchema = JSON.stringify({
+const personSchema = JSON.stringify({
   '@context': 'https://schema.org',
   '@type': 'Person',
   name: 'Shota Mtvarelishvili',
@@ -486,8 +520,8 @@ var personSchema = JSON.stringify({
     addressCountry: 'GE'
   }
 });
-var aboutHead = '<script type="application/ld+json">' + personSchema + '</script>';
-var aboutPage = wrapInBase(aboutContent, {
+const aboutHead = '<script type="application/ld+json">' + personSchema + '</script>';
+const aboutPage = wrapInBase(aboutContent, {
   title: 'About \u2014 Shota Mtvarelishvili',
   ogTitle: 'About',
   description: 'About Shota Mtvarelishvili — Senior Software Engineer based in Tbilisi, Georgia.',
@@ -499,8 +533,8 @@ var aboutPage = wrapInBase(aboutContent, {
 writeFile(path.join(DIST_DIR, 'about', 'index.html'), aboutPage);
 
 // 404 page
-var notFoundContent = render(notFoundTemplate, { posts: homePosts.slice(0, 5) });
-var notFoundPage = wrapInBase(notFoundContent, {
+const notFoundContent = render(notFoundTemplate, { posts: homePosts.slice(0, 5) });
+const notFoundPage = wrapInBase(notFoundContent, {
   title: '404 \u2014 Shota Mtvarelishvili',
   ogTitle: '404',
   description: 'Page not found.',
@@ -513,20 +547,19 @@ writeFile(path.join(DIST_DIR, '404.html'), notFoundPage);
 
 // --- RSS Feed ---
 
-var rssItems = posts.slice(0, 20).map(function (p) {
-  var body = parseMarkdown(p.body);
+const rssItems = posts.slice(0, 20).map(p => {
   return '    <item>\n' +
     '      <title>' + escapeXml(p.title) + '</title>\n' +
     '      <link>' + BASE_URL + '/posts/' + p.slug + '/</link>\n' +
     '      <guid>' + BASE_URL + '/posts/' + p.slug + '/</guid>\n' +
     '      <pubDate>' + new Date(p.date + 'T00:00:00Z').toUTCString() + '</pubDate>\n' +
     '      <description>' + escapeXml(p.description) + '</description>\n' +
-    '      <content:encoded><![CDATA[' + body + ']]></content:encoded>\n' +
+    '      <content:encoded><![CDATA[' + p._html + ']]></content:encoded>\n' +
     '      <author>mtvarelishvili@proton.me (Shota Mtvarelishvili)</author>\n' +
     '    </item>';
 }).join('\n');
 
-var rss = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+const rss = '<?xml version="1.0" encoding="UTF-8"?>\n' +
   '<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">\n' +
   '  <channel>\n' +
   '    <title>Shota Mtvarelishvili</title>\n' +
@@ -544,16 +577,19 @@ writeFile(path.join(DIST_DIR, 'rss.xml'), rss);
 
 // --- Sitemap ---
 
-var sitemapUrls = [
-  BASE_URL + '/',
-  BASE_URL + '/archive/',
-  BASE_URL + '/about/'
-].concat(posts.map(function (p) { return BASE_URL + '/posts/' + p.slug + '/'; }));
+const sitemapEntries = [
+  { url: BASE_URL + '/', date: posts.length > 0 ? posts[0].date : null },
+  { url: BASE_URL + '/archive/', date: posts.length > 0 ? posts[0].date : null },
+  { url: BASE_URL + '/about/', date: null }
+].concat(posts.map(p => ({ url: BASE_URL + '/posts/' + p.slug + '/', date: p.date })));
 
-var sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+const sitemap = '<?xml version="1.0" encoding="UTF-8"?>\n' +
   '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-  sitemapUrls.map(function (url) {
-    return '  <url>\n    <loc>' + url + '</loc>\n  </url>';
+  sitemapEntries.map(entry => {
+    let xml = '  <url>\n    <loc>' + entry.url + '</loc>';
+    if (entry.date) xml += '\n    <lastmod>' + entry.date + '</lastmod>';
+    xml += '\n  </url>';
+    return xml;
   }).join('\n') + '\n' +
   '</urlset>\n';
 
@@ -566,5 +602,5 @@ writeFile(path.join(DIST_DIR, 'robots.txt'),
 
 // --- Done ---
 
-var elapsed = Date.now() - startTime;
+const elapsed = Date.now() - startTime;
 console.log('Build complete: ' + posts.length + ' posts in ' + elapsed + 'ms');
